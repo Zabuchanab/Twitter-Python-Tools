@@ -1,5 +1,8 @@
 import pandas as pd
 import numpy as np
+import re
+from time import strptime
+from datetime import datetime
 import tweepy
 
 class TwitterExplorer():
@@ -34,6 +37,36 @@ class TwitterExplorer():
                 .transpose()\
                     .rename(columns={0:'Resultados'})
 
+    def TotalTweets(self,usuario):
+        
+        total_tweets = f"El usuario {usuario} escribio {len(self.ExtraccionTweets(usuario))} tweets"
+
+        return total_tweets
+
+    def FechaConversor(self,fecha):
+    
+        dia_numerico = re.search(r"[0-9]{2}",fecha)[0]
+
+        dia_nominal = re.findall("[a-zA-Z]{3}" ,fecha)[0]
+
+        mes_numerico = str(strptime(re.findall("[a-zA-Z]{3}" ,fecha)[1].upper(),"%b").tm_mon)
+
+        if len(mes_numerico)==2:
+            pass
+        else:
+            mes_numerico = str('0')+mes_numerico
+
+        año_numerico = fecha[-4:]
+
+        hora = re.findall("[0-9]{2}\:[0-9]{2}\:+[0-9]{2}",fecha)[0]
+
+        dict_month = {}
+
+        nueva_fecha = f'{dia_numerico}-{mes_numerico}-{año_numerico} {hora}'
+
+        return nueva_fecha
+
+
     def ExtraccionTweets(self,usuario):
 
         try:
@@ -57,13 +90,15 @@ class TwitterExplorer():
                     id_viejo = tweets[-1].id
                     historicos.extend(tweets)
 
-                    print(f'Hasta ahora se descargaron {len(historicos)} tweets')
+                    print(f'Hasta ahora se descargaron {len(historicos)} tweets del usuario {usuario.upper()}')
 
 
             data = pd.DataFrame(data=[tweet.text for tweet in historicos],\
                 columns=['texto-tweet'])
 
-            data['fecha'] = [tweet._json['created_at'][0:30] for tweet in historicos]
+            data['fecha'] = [tweet._json['created_at'] for tweet in historicos]
+
+            data['fecha'] = data['fecha'].apply(self.FechaConversor)
 
             data['id'] = [tweet.id for tweet in historicos]
 
@@ -91,6 +126,8 @@ class TwitterExplorer():
         except:
 
             return 'No se pudo crear la base'
+
+from credenciales import twitter_consumer_key,twitter_consumer_secret,twitter_access_token,twitter_access_token_secret
 
 TwitterExplorer = TwitterExplorer(consumer_key=twitter_consumer_key,
                                     consumer_secret=twitter_consumer_secret,
