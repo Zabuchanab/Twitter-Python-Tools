@@ -3,6 +3,7 @@ import numpy as np
 import re
 from time import strptime
 from datetime import datetime
+import plotly.express as px
 import tweepy
 
 class TwitterExplorer():
@@ -62,7 +63,7 @@ class TwitterExplorer():
 
         dict_month = {}
 
-        nueva_fecha = f'{dia_numerico}-{mes_numerico}-{año_numerico} {hora}'
+        nueva_fecha = datetime.strptime(f'{dia_numerico}-{mes_numerico}-{año_numerico} {hora}','%d-%m-%Y %H:%M:%S')
 
         return nueva_fecha
 
@@ -94,7 +95,7 @@ class TwitterExplorer():
 
 
             data = pd.DataFrame(data=[tweet.text for tweet in historicos],\
-                columns=['texto-tweet'])
+                columns=['tweet'])
 
             data['fecha'] = [tweet._json['created_at'] for tweet in historicos]
 
@@ -126,6 +127,39 @@ class TwitterExplorer():
         except:
 
             return 'No se pudo crear la base'
+
+    def VizSerieTweets(self,usuario):
+
+        data = self.ExtraccionTweets(usuario)
+
+        figura = px.line(data,x='fecha',
+                            y=['likes','retweets'],
+                                hover_data=['tweet'],
+                                    title=f'Evolucion de Tweets y Likes de {usuario}',
+                                        labels=dict(x='Fecha',y='Cantidad absoluta',color='Place'),
+                                        template='ggplot2',
+                                                                                ) 
+
+        figura.update_xaxes(title_text='Fecha - Barra de ajuste temporal',
+                            ticks='outside',tickwidth=2,tickcolor='black',
+                            rangeslider_visible=True,
+                            rangeselector=dict(
+                                buttons=list(
+                                    [
+                                        dict(count=7,label='Última semana',step='day',stepmode='backward'),
+                                        dict(count=1,label='Último mes',step='month',stepmode='backward'),
+                                        dict(count=6,label='Últimos seis meses',step='month',stepmode='backward'),
+                                        dict(count=1,label='Último año',step='year',stepmode='backward'),
+                                        dict(label='todo',step='all')
+                                    ]
+                                )
+                            ))
+
+        figura.update_yaxes(title_text='Cantidad absoluta',ticks='outside',tickwidth=2,tickcolor='black')
+
+        figura.update_layout(legend=dict(orientation='h',yanchor='bottom',y=1.02,xanchor='right',x=1),legend_title_text='')
+
+        return figura
 
 from credenciales import twitter_consumer_key,twitter_consumer_secret,twitter_access_token,twitter_access_token_secret
 
