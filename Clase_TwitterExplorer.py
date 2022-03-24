@@ -141,7 +141,6 @@ class TwitterExplorer():
                                                                                 ) 
 
         figura.update_xaxes(title_text='Fecha - Barra de ajuste temporal',
-                            ticks='outside',tickwidth=2,tickcolor='black',
                             rangeslider_visible=True,
                             rangeselector=dict(
                                 buttons=list(
@@ -161,9 +160,24 @@ class TwitterExplorer():
 
         return figura
 
+    def VizRankingTweets(self,usuario):
+
+        data = self.ExtraccionTweets(str(usuario))
+
+        figura = px.bar(data_frame=data.sort_values(by='likes',ascending=False)[0:10],
+                    x=[x[0:30] for x in data.sort_values(by='likes',ascending=False)[0:10]['tweet']],
+                    y=['likes','retweets'],
+                    barmode='group',
+                    text_auto='.2s',
+                    title=f'Ranking de los 10 mejores tweets del usuario {usuario}')
+
+        return figura
+
+
+#Se deben generar credenciales mediante una cuenta de Twitter-Developer 
 from credenciales import twitter_consumer_key,twitter_consumer_secret,twitter_access_token,twitter_access_token_secret
 
-TwitterExplorer = TwitterExplorer(consumer_key=twitter_consumer_key,
+te = TwitterExplorer(consumer_key=twitter_consumer_key,
                                     consumer_secret=twitter_consumer_secret,
                                     access_token=twitter_access_token,
                                     access_token_secret=twitter_access_token_secret
