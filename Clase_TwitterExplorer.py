@@ -6,6 +6,7 @@ from datetime import datetime
 import plotly.express as px
 import tweepy
 
+
 class TwitterExplorer():
 
     def __init__(self,consumer_key,consumer_secret,access_token,access_token_secret):
@@ -115,6 +116,35 @@ class TwitterExplorer():
 
             return 'No se pudo realizar la descarga'
 
+    def ExtractorRespuestasTweet(self,usuario,tweet_id):
+
+        respuestas = []
+
+        for respuesta_tweet in tweepy.Cursor(self.api.search_tweets,
+                                         q=f'to:{usuario}').items(200):
+
+            if hasattr(respuesta_tweet,'in_reply_to_status_id_str'):
+
+                if (respuesta_tweet.in_reply_to_status_id_str==tweet_id):
+
+                    lista = [respuesta_tweet._json['text'],tweet_id]
+
+                    respuestas.append(lista)
+
+        return respuestas
+
+    def BaseRespuestasTweetsHistorico(self,usuario):
+
+        base_id_tweets = self.ExtraccionTweets(usuario)['id']
+
+        listado_respuestas = []
+        
+        for id in base_id_tweets:
+            extraccion = self.ExtractorRespuestasTweet(usuario,str(id))
+            listado_respuestas.append(extraccion)
+
+        return listado_respuestas
+
     def GeneracionCSV(self,usuario):
 
         data = self.ExtraccionTweets(usuario)
@@ -171,9 +201,7 @@ class TwitterExplorer():
                     text_auto='.2s',
                     title=f'Ranking de los 10 mejores tweets del usuario {usuario}')
 
-        return figura
-
-
+        return 
 #Se deben generar credenciales mediante una cuenta de Twitter-Developer 
 from credenciales import twitter_consumer_key,twitter_consumer_secret,twitter_access_token,twitter_access_token_secret
 
