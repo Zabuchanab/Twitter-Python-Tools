@@ -5,6 +5,17 @@ from time import strptime
 from datetime import datetime
 import plotly.express as px
 import tweepy
+from wordcloud import WordCloud, STOPWORDS
+import matplotlib.pyplot as plt
+from sklearn.feature_extraction.text import CountVectorizer,TfidfTransformer
+from importlib.resources import path
+from io import open_code
+import pathlib
+import os
+from importlib.resources import path
+import os
+import pathlib
+import shutil
 
 
 class TwitterExplorer():
@@ -22,6 +33,7 @@ class TwitterExplorer():
 
         #Objeto API
         self.api = tweepy.API(autenticacion,wait_on_rate_limit=True)
+
 
     def ObjetoUsuario(self,usuario):
         usuario = self.api.get_user(screen_name=usuario)
@@ -82,10 +94,12 @@ class TwitterExplorer():
 
             while True:
 
-                    tweets = self.api.user_timeline(screen_name = usuario,
+                    tweets = self.api.user_timeline(screen_name =usuario,
                         count=200,
                         include_rts = False,
-                        max_id=id_viejo-1)
+                        max_id=id_viejo-1,
+                        tweet_mode='extended'
+                        )
 
                     if len(tweets)==0:
                         break
@@ -95,14 +109,15 @@ class TwitterExplorer():
                     print(f'Hasta ahora se descargaron {len(historicos)} tweets del usuario {usuario.upper()}')
 
 
-            data = pd.DataFrame(data=[tweet.text for tweet in historicos],\
-                columns=['tweet'])
+            data = pd.DataFrame(data=[tweet.id for tweet in historicos],\
+                columns=['id'])
+
 
             data['fecha'] = [tweet._json['created_at'] for tweet in historicos]
 
             data['fecha'] = data['fecha'].apply(self.FechaConversor)
 
-            data['id'] = [tweet.id for tweet in historicos]
+            data['tweet'] = [tweet.full_text for tweet in historicos]
 
             data['retweets'] = [tweet.retweet_count for tweet in historicos]
 
@@ -121,7 +136,7 @@ class TwitterExplorer():
         respuestas = []
 
         for respuesta_tweet in tweepy.Cursor(self.api.search_tweets,
-                                         q=f'to:{usuario}').items(200):
+                                         q=f'to:{usuario}',result_type='recent').items(1000):
 
             if hasattr(respuesta_tweet,'in_reply_to_status_id_str'):
 
@@ -131,7 +146,7 @@ class TwitterExplorer():
 
                     respuestas.append(lista)
 
-        return respuestas
+        return pd.DataFrame(respuestas), print(f'Se agregaron {len(respuestas)} comentarios')
 
     def BaseRespuestasTweetsHistorico(self,usuario):
 
@@ -143,12 +158,24 @@ class TwitterExplorer():
             extraccion = self.ExtractorRespuestasTweet(usuario,str(id))
             listado_respuestas.append(extraccion)
 
+        listado_respuestas = pd.DataFrame(listado_respuestas)
+
         return listado_respuestas
+
+    def GeneradorCSVRespuestas(self,usuario):
+
+        data = self.BaseRespuestasTweetsHistorico(usuario)
+
+        try: 
+            data.to_csv(f'tabla{len(data)}_respuestas_{usuario}')
+
+        except:
+
+            return 'No se pudo generar la base'
 
     def GeneracionCSV(self,usuario):
 
-        data = self.ExtraccionTweets(usuario)
-        
+        data = pd.DataFrame(self.ExtraccionTweets(usuario))
         try:
             data.to_csv(f'tabla_{len(data)}_tweets_{usuario}')
             
@@ -201,7 +228,95 @@ class TwitterExplorer():
                     text_auto='.2s',
                     title=f'Ranking de los 10 mejores tweets del usuario {usuario}')
 
-        return 
+        return figura
+
+    def LimpiadorTweets(self,texto):
+
+        texto = re.sub(r"@","",texto)
+        texto = re.sub(r"#","",texto) 
+        texto = re.sub(r"RT[\s]+","",texto) 
+        texto = re.sub(r"https?:\/\/\S+","",texto)
+        
+        return texto
+
+    def SegmentacionPeriodos(self,data):
+
+        data['periodo'] = data['fecha'].apply(lambda fecha: datetime.strftime(fecha,'%B, %Y'))
+        data['año'] = data['fecha'].apply(lambda fecha: datetime.strftime(fecha,'%Y'))
+
+        return data
+
+
+    def BolsadePalabras(self):
+
+        ruta = str(pathlib.Path().absolute()) + '/stop_words_spanish.txt'
+        archivo = open(ruta,'r')
+        stopwords = archivo.readlines()
+        stopwords2 = []
+        for elemento in stopwords:
+            stopwords2.append(elemento.replace('\n',''))
+        bolsa = set(STOPWORDS)
+        bolsa.update(stopwords2)
+        archivo.close()
+        bolsa.update(['Conferencia','matutina','Prensa','Palacio','Na'])
+
+        return bolsa
+
+
+    def CrearDirectorio(self,usuario):
+
+        if not os.path.isdir(f'./extracciones_usuarios'):
+            os.mkdir('./extracciones_usuarios')
+            print(f'Directorio_extracciones_creado')
+        else:
+            print('la carpeta extraccion de usuarios ya existe')
+        
+
+        if not os.path.isdir(f'./{usuario}'):
+            os.mkdir(f'./extracciones_usuarios/{usuario}')
+            print(f'Directorio_{usuario}_creado')
+        else:
+            print(f'la carpeta {usuario} ya existe')
+        
+
+    def VisualizacionWordClouds(self,data,usuario):
+
+        periodos = data['año'].unique()
+        
+        for periodo in periodos:
+            datos = data[data['año']==periodo]
+            nuevas_palabras = ' '.join(datos['tweet'])
+            wordcloud = WordCloud(stopwords=self.BolsadePalabras(),
+                      width=3000,
+                      height=2000,
+                      collocations=False,
+                      background_color='white',
+                      min_font_size=10).generate(nuevas_palabras)
+
+            plt.figure(figsize=(15,10))
+            plt.imshow(wordcloud,interpolation='bilinear')
+            plt.axis('off')
+
+            plt.savefig(f'extracciones_usuarios/{usuario}/figura_{periodo}')
+
+    def ProcesoETLWordCloud(self,usuario):
+        try:
+            data = self.ExtraccionTweets(usuario)
+            print(f'Se extrajo la data del usuario {usuario}')
+        except:
+            print('No se pudo hacer la extracción')
+
+        try:
+            self.CrearDirectorio(usuario)
+        except:
+            print('Error al crear el directorio ')
+
+        data['tweet'] = data['tweet'].apply(self.LimpiadorTweets)
+        data = self.SegmentacionPeriodos(data)
+
+        return self.VisualizacionWordClouds(data,usuario)
+        
+        
 #Se deben generar credenciales mediante una cuenta de Twitter-Developer 
 from credenciales import twitter_consumer_key,twitter_consumer_secret,twitter_access_token,twitter_access_token_secret
 
